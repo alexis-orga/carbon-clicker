@@ -81,18 +81,27 @@
         }
 
         #planet-image {
-            max-width: 100%;
-            height: auto;
-            max-height: 200px;
+            width: 100%;
+            height: 200px;
             border-radius: 5px;
-            background-color: #cfc; /* Couleur de substitution */
+            object-fit: cover;
+            background-size: contain;
+            background-position: center;
         }
 
-        #upgrades-container {
+        #upgrades-container, #eco-upgrades-container {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
             gap: 15px;
             margin-bottom: 20px;
+        }
+
+        .section-title {
+            margin-top: 20px;
+            margin-bottom: 10px;
+            color: #333;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 5px;
         }
 
         .upgrade-card {
@@ -100,6 +109,12 @@
             padding: 15px;
             border-radius: 5px;
             background-color: #f9f9f9;
+            transition: transform 0.2s;
+        }
+
+        .upgrade-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
         }
 
         .upgrade-card h3 {
@@ -135,13 +150,23 @@
             font-size: 12px;
         }
 
+        .eco-upgrade .buy-upgrade {
+            background-color: #4CAF50;
+            color: white;
+        }
+
+        .tech-upgrade .buy-upgrade {
+            background-color: #2196F3;
+            color: white;
+        }
+
         @media (max-width: 600px) {
             #header {
                 flex-direction: column;
                 gap: 10px;
             }
             
-            #upgrades-container {
+            #upgrades-container, #eco-upgrades-container {
                 grid-template-columns: 1fr;
             }
         }
@@ -162,10 +187,15 @@
             <button id="sell-data-btn">Vendre des données (+10€, CO₂ +2)</button>
         </div>
         <div id="planet-status">
-            <div id="planet-image" style="height: 200px; width: 100%; background-color: #4CAF50;"></div>
+            <div id="planet-image"></div>
             <p id="planet-description">Planète en parfaite santé</p>
         </div>
+
+        <h2 class="section-title">Améliorations Technologiques</h2>
         <div id="upgrades-container"></div>
+        
+        <h2 class="section-title">Améliorations Écologiques</h2>
+        <div id="eco-upgrades-container"></div>
         
         <div id="log">
             <p>Bienvenue dans Carbon Clicker! Entraînez des modèles d'IA tout en gérant votre impact écologique.</p>
@@ -184,18 +214,31 @@
             energyEfficiency: 0,
             co2Reduction: 0,
             treePlantations: 0,
+            carbonCapture: 0,
             upgrades: []
         };
 
         // Images de la planète selon le niveau de CO2
         const planetImages = [
-            { co2Threshold: 0, color: "#4CAF50", description: "Planète en parfaite santé" },
-            { co2Threshold: 200, color: "#FF9800", description: "Pollution sévère" },
-            { co2Threshold: 500, color: "#F44336", description: "Dégâts environnementaux critiques" }
+            { 
+                co2Threshold: 0, 
+                image: "./assets/img/Foret_healthy.jpg", 
+                description: "Planète en parfaite santé" 
+            },
+            { 
+                co2Threshold: 200, 
+                image: "./assets/img/Dying_forest.jpg", 
+                description: "Pollution sévère" 
+            },
+            { 
+                co2Threshold: 500, 
+                image: `./assets/img/Dead_forest.jpg`, 
+                description: "Dégâts environnementaux critiques" 
+            }
         ];
 
-        // Améliorations disponibles
-        const upgrades = [
+        // Améliorations technologiques
+        const techUpgrades = [
             {
                 id: "solar_panel",
                 name: "Panneau Solaire",
@@ -206,7 +249,8 @@
                     gameState.co2 -= 2;
                 },
                 unlocked: () => gameState.points >= 20 && gameState.money >= 100,
-                description: "+1 Énergie/sec, -2 CO₂"
+                description: "+1 Énergie/sec, -2 CO₂",
+                category: "tech"
             },
             {
                 id: "auto_trainer",
@@ -214,8 +258,35 @@
                 cost: 100,
                 effect: () => { gameState.autoClickers += 1; },
                 unlocked: () => gameState.points >= 50,
-                description: "0.1 Point/sec (consomme 0.2 Énergie/sec)"
+                description: "0.1 Point/sec (consomme 0.2 Énergie/sec)",
+                category: "tech"
             },
+            {
+                id: "quantum_cooling",
+                name: "Refroidissement Quantique",
+                cost: 300,
+                moneyCost: 500,
+                effect: () => { gameState.energyEfficiency += 0.5; },
+                unlocked: () => gameState.autoClickers >= 3,
+                description: "Réduit la consommation d'énergie de 50%",
+                category: "tech"
+            },
+            {
+                id: "neural_optimization",
+                name: "Optimisation Neuronale",
+                cost: 500,
+                effect: () => { 
+                    // Les modèles produisent plus de points
+                    gameState.pointsMultiplier = (gameState.pointsMultiplier || 1) + 0.5;
+                },
+                unlocked: () => gameState.points >= 300,
+                description: "+50% de points par entraînement",
+                category: "tech"
+            }
+        ];
+
+        // Améliorations écologiques
+        const ecoUpgrades = [
             {
                 id: "tree_plantation",
                 name: "Plantation d'arbres",
@@ -226,18 +297,56 @@
                     gameState.co2Reduction += 0.5;
                 },
                 unlocked: () => gameState.points >= 80,
-                description: "Réduit 0.5 CO₂/sec"
+                description: "Réduit 0.5 CO₂/sec",
+                repeatable: true,
+                category: "eco"
             },
             {
-                id: "quantum_cooling",
-                name: "Refroidissement Quantique",
-                cost: 300,
+                id: "carbon_capture",
+                name: "Capture de carbone",
+                cost: 250,
+                moneyCost: 300,
+                effect: () => { 
+                    gameState.carbonCapture = (gameState.carbonCapture || 0) + 1;
+                    gameState.co2Reduction += 1;
+                },
+                unlocked: () => gameState.points >= 150 && gameState.treePlantations >= 1,
+                description: "Réduit 1 CO₂/sec",
+                repeatable: true,
+                category: "eco"
+            },
+            {
+                id: "algae_farms",
+                name: "Fermes d'algues",
+                cost: 400,
                 moneyCost: 500,
-                effect: () => { gameState.energyEfficiency += 0.5; },
-                unlocked: () => gameState.autoClickers >= 3,
-                description: "Réduit la consommation d'énergie de 50%"
+                effect: () => { 
+                    gameState.algaeFarms = (gameState.algaeFarms || 0) + 1;
+                    gameState.co2Reduction += 2;
+                    gameState.oxygenProduction = (gameState.oxygenProduction || 0) + 0.5;
+                },
+                unlocked: () => gameState.points >= 300 && gameState.carbonCapture >= 1,
+                description: "Réduit 2 CO₂/sec et améliore la qualité de l'air",
+                repeatable: true,
+                category: "eco"
+            },
+            {
+                id: "green_ai",
+                name: "IA Écologique",
+                cost: 1000,
+                moneyCost: 1000,
+                effect: () => { 
+                    gameState.co2PerTraining = (gameState.co2PerTraining || 1) * 0.5;
+                    gameState.energyEfficiency += 0.2;
+                },
+                unlocked: () => gameState.points >= 800 && gameState.co2Reduction >= 5,
+                description: "-50% de CO₂ pour chaque entraînement, +20% d'efficacité énergétique",
+                category: "eco"
             }
         ];
+
+        // Combiner les améliorations
+        const upgrades = [...techUpgrades, ...ecoUpgrades];
 
         // Variables globales
         let gameInterval;
@@ -253,6 +362,7 @@
         const generateEnergyBtn = document.getElementById('generate-energy-btn');
         const sellDataBtn = document.getElementById('sell-data-btn');
         const upgradesContainer = document.getElementById('upgrades-container');
+        const ecoUpgradesContainer = document.getElementById('eco-upgrades-container');
         const log = document.getElementById('log');
         const planetImage = document.getElementById('planet-image');
         const planetDescription = document.getElementById('planet-description');
@@ -276,10 +386,14 @@
             trainBtn.addEventListener('click', function() {
                 console.log("Bouton entraîner cliqué");
                 if (gameState.energy >= 0.5) {
-                    gameState.points += 1;
-                    gameState.co2 += 0.5;
+                    const pointsMultiplier = gameState.pointsMultiplier || 1;
+                    const co2PerTraining = gameState.co2PerTraining || 1;
+                    
+                    gameState.points += 1 * pointsMultiplier;
+                    gameState.co2 += 0.5 * co2PerTraining;
                     gameState.energy -= 0.5;
-                    addLog("Modèle entraîné (+1 Point, +0.5 CO₂, -0.5 Energie)");
+                    
+                    addLog(`Modèle entraîné (+${(1 * pointsMultiplier).toFixed(1)} Points, +${(0.5 * co2PerTraining).toFixed(1)} CO₂, -0.5 Energie)`);
                     updateUI();
                 } else {
                     addLog("Erreur: Pas assez d'énergie pour entraîner!");
@@ -313,6 +427,13 @@
                     buyUpgrade(upgradeId);
                 }
             });
+
+            ecoUpgradesContainer.addEventListener('click', function(e) {
+                if (e.target.classList.contains('buy-upgrade')) {
+                    const upgradeId = e.target.getAttribute('data-id');
+                    buyUpgrade(upgradeId);
+                }
+            });
         }
 
         // Boucle principale du jeu
@@ -323,15 +444,19 @@
                 // Production automatique des modèles
                 if (gameState.autoClickers > 0 && gameState.energy >= 0.2) {
                     const energyEfficiency = gameState.energyEfficiency || 0;
+                    const pointsMultiplier = gameState.pointsMultiplier || 1;
+                    const co2PerTraining = gameState.co2PerTraining || 1;
+                    
                     const energyCost = gameState.autoClickers * 0.2 * (1 - energyEfficiency);
-                    const pointsGained = gameState.autoClickers * 0.1;
+                    const pointsGained = gameState.autoClickers * 0.1 * pointsMultiplier;
+                    const co2Generated = gameState.autoClickers * 0.3 * co2PerTraining;
                     
                     gameState.points += pointsGained;
                     gameState.energy -= energyCost;
-                    gameState.co2 += gameState.autoClickers * 0.3;
+                    gameState.co2 += co2Generated;
                     
                     if (Math.random() < 0.1) {
-                        addLog(`Production auto: +${pointsGained.toFixed(1)} Points, -${energyCost.toFixed(1)} Energie`);
+                        addLog(`Production auto: +${pointsGained.toFixed(1)} Points, -${energyCost.toFixed(1)} Energie, +${co2Generated.toFixed(1)} CO₂`);
                     }
                 }
                 
@@ -343,7 +468,7 @@
                 // Réduction CO2 des plantations
                 if (gameState.co2Reduction > 0) {
                     const reduction = gameState.co2Reduction;
-                    gameState.co2 = Math.max(0, gameState.co2 - reduction);
+                    gameState.co2 = Math.max(0, gameState.co2 - reduction * 0.1);
                 }
                 
                 updatePlanetImage();
@@ -364,8 +489,8 @@
                 .reverse()
                 .find(img => gameState.co2 >= img.co2Threshold);
             
-            if (newState && newState.co2Threshold !== currentPlanetState) {
-                planetImage.style.backgroundColor = newState.color;
+            if (newState && (currentPlanetState !== newState.co2Threshold)) {
+                planetImage.style.backgroundImage = `url(${newState.image})`;
                 planetDescription.textContent = newState.description;
                 currentPlanetState = newState.co2Threshold;
                 addLog(`Changement climatique: ${newState.description}`);
@@ -377,6 +502,14 @@
             const upgrade = upgrades.find(u => u.id === upgradeId);
             
             if (!upgrade) return;
+            
+            // Vérifier si c'est une amélioration répétable ou si elle n'a pas déjà été achetée
+            const canBuyAgain = upgrade.repeatable || !gameState.upgrades.includes(upgradeId);
+            
+            if (!canBuyAgain) {
+                addLog(`${upgrade.name} a déjà été acheté!`);
+                return;
+            }
             
             // Vérifier les conditions
             if (gameState.points < upgrade.cost) {
@@ -398,7 +531,14 @@
             gameState.points -= upgrade.cost;
             if (upgrade.moneyCost) gameState.money -= upgrade.moneyCost;
             upgrade.effect();
-            gameState.upgrades.push(upgradeId);
+            
+            // Pour les améliorations répétables, on stocke le nombre acheté
+            if (upgrade.repeatable) {
+                const countKey = `${upgradeId}_count`;
+                gameState[countKey] = (gameState[countKey] || 0) + 1;
+            } else {
+                gameState.upgrades.push(upgradeId);
+            }
             
             addLog(`${upgrade.name} acheté! ${upgrade.description}`);
             updateUI();
@@ -407,21 +547,36 @@
         // Affichage des améliorations disponibles
         function renderUpgrades() {
             upgradesContainer.innerHTML = '';
+            ecoUpgradesContainer.innerHTML = '';
             
             upgrades.forEach(upgrade => {
                 const canAfford = gameState.points >= upgrade.cost && 
                                 (!upgrade.moneyCost || gameState.money >= upgrade.moneyCost);
-                const isUnlocked = upgrade.unlocked() && !gameState.upgrades.includes(upgrade.id);
+                                
+                // Pour les améliorations répétables, on les affiche toujours si elles sont débloquées
+                // Pour les non-répétables, on les affiche seulement si elles n'ont pas été achetées
+                const shouldDisplay = upgrade.unlocked() && 
+                                    (upgrade.repeatable || !gameState.upgrades.includes(upgrade.id));
                 
-                if (isUnlocked) {
+                if (shouldDisplay) {
                     const upgradeElement = document.createElement('div');
-                    upgradeElement.className = `upgrade-card ${canAfford ? '' : 'unavailable'}`;
+                    upgradeElement.className = `upgrade-card ${canAfford ? '' : 'unavailable'} ${upgrade.category}-upgrade`;
                     
                     let costText = `Coût: ${upgrade.cost} Points`;
                     if (upgrade.moneyCost) costText += ` + ${upgrade.moneyCost}€`;
                     
+                    // Afficher le nombre d'améliorations répétables déjà achetées
+                    let countText = '';
+                    if (upgrade.repeatable) {
+                        const countKey = `${upgrade.id}_count`;
+                        const count = gameState[countKey] || 0;
+                        if (count > 0) {
+                            countText = ` (x${count})`;
+                        }
+                    }
+                    
                     upgradeElement.innerHTML = `
-                        <h3>${upgrade.name}</h3>
+                        <h3>${upgrade.name}${countText}</h3>
                         <p>${upgrade.description}</p>
                         <p class="cost">${costText}</p>
                         <button class="buy-upgrade" data-id="${upgrade.id}" ${canAfford ? '' : 'disabled'}>
@@ -429,7 +584,12 @@
                         </button>
                     `;
                     
-                    upgradesContainer.appendChild(upgradeElement);
+                    // Ajouter l'amélioration à la catégorie appropriée
+                    if (upgrade.category === 'tech') {
+                        upgradesContainer.appendChild(upgradeElement);
+                    } else if (upgrade.category === 'eco') {
+                        ecoUpgradesContainer.appendChild(upgradeElement);
+                    }
                 }
             });
         }

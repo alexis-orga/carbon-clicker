@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Carbon Clicker: L'IA Durable</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f5f5f5;
+            margin: 0;
+            padding: 0;
+        }
+
+        #game-container {
+            max-width: 800px;
+            margin: 20px auto;
+            background-color: white;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            border-radius: 10px;
+            padding: 20px;
+        }
+
+        #header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            background-color: #f0f8ff;
+            padding: 10px;
+            border-radius: 5px;
+        }
+
+        .resource {
+            font-weight: bold;
+        }
+
+        #main-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        button {
+            padding: 10px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.3s;
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        #train-btn {
+            background-color: #4CAF50;
+            color: white;
+        }
+
+        #generate-energy-btn {
+            background-color: #2196F3;
+            color: white;
+        }
+
+        #sell-data-btn {
+            background-color: #FF9800;
+            color: white;
+        }
+
+        button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+        }
+
+        #planet-status {
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        #planet-image {
+            max-width: 100%;
+            height: auto;
+            max-height: 200px;
+            border-radius: 5px;
+            background-color: #cfc; /* Couleur de substitution */
+        }
+
+        #upgrades-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .upgrade-card {
+            border: 1px solid #ddd;
+            padding: 15px;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+        }
+
+        .upgrade-card h3 {
+            margin-top: 0;
+            color: #333;
+        }
+
+        .upgrade-card.unavailable {
+            opacity: 0.7;
+        }
+
+        .cost {
+            font-style: italic;
+            color: #777;
+        }
+
+        #log {
+            height: 150px;
+            overflow-y: auto;
+            background-color: #f8f8f8;
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+        }
+
+        #log p {
+            margin: 5px 0;
+            font-size: 14px;
+        }
+
+        .time {
+            color: #888;
+            font-size: 12px;
+        }
+
+        @media (max-width: 600px) {
+            #header {
+                flex-direction: column;
+                gap: 10px;
+            }
+            
+            #upgrades-container {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div id="header">
+            <div class="resource">Points IA: <span id="points">0</span></div>
+            <div class="resource">CO₂: <span id="co2">0</span> ppm</div>
+            <div class="resource">Énergie: <span id="energy">10</span> MW</div>
+            <div class="resource">Argent: <span id="money">50</span> €</div>
+        </div>
+        
+        <div id="main-actions">
+            <button id="train-btn">Entraîner un modèle (+1 Point, +0.5 CO², -0.5 Energie)</button>
+            <button id="generate-energy-btn">Générer de l'énergie (CO₂ +5, -10€)</button>
+            <button id="sell-data-btn">Vendre des données (+10€, CO₂ +2)</button>
+        </div>
+        <div id="planet-status">
+            <div id="planet-image" style="height: 200px; width: 100%; background-color: #4CAF50;"></div>
+            <p id="planet-description">Planète en parfaite santé</p>
+        </div>
+        <div id="upgrades-container"></div>
+        
+        <div id="log">
+            <p>Bienvenue dans Carbon Clicker! Entraînez des modèles d'IA tout en gérant votre impact écologique.</p>
+        </div>
+    </div>
+
+    <script>
+        // État du jeu
+        const gameState = {
+            points: 0,
+            co2: 0,
+            energy: 10,
+            money: 50,
+            autoClickers: 0,
+            energyProduction: 0,
+            energyEfficiency: 0,
+            co2Reduction: 0,
+            treePlantations: 0,
+            upgrades: []
+        };
+
+        // Images de la planète selon le niveau de CO2
+        const planetImages = [
+            { co2Threshold: 0, color: "#4CAF50", description: "Planète en parfaite santé" },
+            { co2Threshold: 200, color: "#FF9800", description: "Pollution sévère" },
+            { co2Threshold: 500, color: "#F44336", description: "Dégâts environnementaux critiques" }
+        ];
+
+        // Améliorations disponibles
+        const upgrades = [
+            {
+                id: "solar_panel",
+                name: "Panneau Solaire",
+                cost: 50,
+                moneyCost: 100,
+                effect: () => { 
+                    gameState.energyProduction += 1;
+                    gameState.co2 -= 2;
+                },
+                unlocked: () => gameState.points >= 20 && gameState.money >= 100,
+                description: "+1 Énergie/sec, -2 CO₂"
+            },
+            {
+                id: "auto_trainer",
+                name: "Auto-Entraîneur",
+                cost: 100,
+                effect: () => { gameState.autoClickers += 1; },
+                unlocked: () => gameState.points >= 50,
+                description: "0.1 Point/sec (consomme 0.2 Énergie/sec)"
+            },
+            {
+                id: "tree_plantation",
+                name: "Plantation d'arbres",
+                cost: 150,
+                moneyCost: 200,
+                effect: () => { 
+                    gameState.treePlantations = (gameState.treePlantations || 0) + 1;
+                    gameState.co2Reduction += 0.5;
+                },
+                unlocked: () => gameState.points >= 80,
+                description: "Réduit 0.5 CO₂/sec"
+            },
+            {
+                id: "quantum_cooling",
+                name: "Refroidissement Quantique",
+                cost: 300,
+                moneyCost: 500,
+                effect: () => { gameState.energyEfficiency += 0.5; },
+                unlocked: () => gameState.autoClickers >= 3,
+                description: "Réduit la consommation d'énergie de 50%"
+            }
+        ];
+
+        // Variables globales
+        let gameInterval;
+        let lastUpdate = Date.now();
+        let currentPlanetState = 0;
+
+        // Éléments du DOM
+        const pointsDisplay = document.getElementById('points');
+        const co2Display = document.getElementById('co2');
+        const energyDisplay = document.getElementById('energy');
+        const moneyDisplay = document.getElementById('money');
+        const trainBtn = document.getElementById('train-btn');
+        const generateEnergyBtn = document.getElementById('generate-energy-btn');
+        const sellDataBtn = document.getElementById('sell-data-btn');
+        const upgradesContainer = document.getElementById('upgrades-container');
+        const log = document.getElementById('log');
+        const planetImage = document.getElementById('planet-image');
+        const planetDescription = document.getElementById('planet-description');
+
+        // Sauvegarde locale
+        function saveGame() {
+            localStorage.setItem('carbonClickerSave', JSON.stringify(gameState));
+            console.log("Jeu sauvegardé");
+        }
+
+        function loadGame() {
+            const saved = JSON.parse(localStorage.getItem('carbonClickerSave'));
+            if (saved) {
+                Object.assign(gameState, saved);
+                console.log("Jeu chargé");
+            }
+        }
+
+        // Configuration des écouteurs d'événements
+        function setupEventListeners() {
+            trainBtn.addEventListener('click', function() {
+                console.log("Bouton entraîner cliqué");
+                if (gameState.energy >= 0.5) {
+                    gameState.points += 1;
+                    gameState.co2 += 0.5;
+                    gameState.energy -= 0.5;
+                    addLog("Modèle entraîné (+1 Point, +0.5 CO₂, -0.5 Energie)");
+                    updateUI();
+                } else {
+                    addLog("Erreur: Pas assez d'énergie pour entraîner!");
+                }
+            });
+
+            generateEnergyBtn.addEventListener('click', function() {
+                console.log("Bouton générer énergie cliqué");
+                if (gameState.money >= 10) {
+                    gameState.energy += 1;
+                    gameState.co2 += 5;
+                    gameState.money -= 10;
+                    addLog("Énergie générée (+1 MW, +5 CO₂, -10€)");
+                    updateUI();
+                } else {
+                    addLog("Erreur: Pas assez d'argent pour générer de l'énergie!");
+                }
+            });
+
+            sellDataBtn.addEventListener('click', function() {
+                console.log("Bouton vendre données cliqué");
+                gameState.money += 10;
+                gameState.co2 += 2;
+                addLog("Données vendues (+10€, +2 CO₂)");
+                updateUI();
+            });
+
+            upgradesContainer.addEventListener('click', function(e) {
+                if (e.target.classList.contains('buy-upgrade')) {
+                    const upgradeId = e.target.getAttribute('data-id');
+                    buyUpgrade(upgradeId);
+                }
+            });
+        }
+
+        // Boucle principale du jeu
+        function startGameLoop() {
+            if (gameInterval) clearInterval(gameInterval);
+            
+            gameInterval = setInterval(() => {
+                // Production automatique des modèles
+                if (gameState.autoClickers > 0 && gameState.energy >= 0.2) {
+                    const energyEfficiency = gameState.energyEfficiency || 0;
+                    const energyCost = gameState.autoClickers * 0.2 * (1 - energyEfficiency);
+                    const pointsGained = gameState.autoClickers * 0.1;
+                    
+                    gameState.points += pointsGained;
+                    gameState.energy -= energyCost;
+                    gameState.co2 += gameState.autoClickers * 0.3;
+                    
+                    if (Math.random() < 0.1) {
+                        addLog(`Production auto: +${pointsGained.toFixed(1)} Points, -${energyCost.toFixed(1)} Energie`);
+                    }
+                }
+                
+                // Production d'énergie solaire
+                if (gameState.energyProduction > 0) {
+                    gameState.energy += gameState.energyProduction * 0.1;
+                }
+                
+                // Réduction CO2 des plantations
+                if (gameState.co2Reduction > 0) {
+                    const reduction = gameState.co2Reduction;
+                    gameState.co2 = Math.max(0, gameState.co2 - reduction);
+                }
+                
+                updatePlanetImage();
+                updateUI();
+                
+                // Sauvegarde automatique
+                if (Date.now() - lastUpdate > 10000) {
+                    saveGame();
+                    lastUpdate = Date.now();
+                }
+            }, 1000);
+        }
+
+        // Mise à jour de l'image de la planète
+        function updatePlanetImage() {
+            const newState = planetImages
+                .slice()
+                .reverse()
+                .find(img => gameState.co2 >= img.co2Threshold);
+            
+            if (newState && newState.co2Threshold !== currentPlanetState) {
+                planetImage.style.backgroundColor = newState.color;
+                planetDescription.textContent = newState.description;
+                currentPlanetState = newState.co2Threshold;
+                addLog(`Changement climatique: ${newState.description}`);
+            }
+        }
+
+        // Achat d'améliorations
+        function buyUpgrade(upgradeId) {
+            const upgrade = upgrades.find(u => u.id === upgradeId);
+            
+            if (!upgrade) return;
+            
+            // Vérifier les conditions
+            if (gameState.points < upgrade.cost) {
+                addLog(`Besoin de ${upgrade.cost} points pour ${upgrade.name}`);
+                return;
+            }
+            
+            if (upgrade.moneyCost && gameState.money < upgrade.moneyCost) {
+                addLog(`Besoin de ${upgrade.moneyCost}€ pour ${upgrade.name}`);
+                return;
+            }
+            
+            if (!upgrade.unlocked()) {
+                addLog(`Conditions non remplies pour ${upgrade.name}`);
+                return;
+            }
+            
+            // Appliquer l'achat
+            gameState.points -= upgrade.cost;
+            if (upgrade.moneyCost) gameState.money -= upgrade.moneyCost;
+            upgrade.effect();
+            gameState.upgrades.push(upgradeId);
+            
+            addLog(`${upgrade.name} acheté! ${upgrade.description}`);
+            updateUI();
+        }
+
+        // Affichage des améliorations disponibles
+        function renderUpgrades() {
+            upgradesContainer.innerHTML = '';
+            
+            upgrades.forEach(upgrade => {
+                const canAfford = gameState.points >= upgrade.cost && 
+                                (!upgrade.moneyCost || gameState.money >= upgrade.moneyCost);
+                const isUnlocked = upgrade.unlocked() && !gameState.upgrades.includes(upgrade.id);
+                
+                if (isUnlocked) {
+                    const upgradeElement = document.createElement('div');
+                    upgradeElement.className = `upgrade-card ${canAfford ? '' : 'unavailable'}`;
+                    
+                    let costText = `Coût: ${upgrade.cost} Points`;
+                    if (upgrade.moneyCost) costText += ` + ${upgrade.moneyCost}€`;
+                    
+                    upgradeElement.innerHTML = `
+                        <h3>${upgrade.name}</h3>
+                        <p>${upgrade.description}</p>
+                        <p class="cost">${costText}</p>
+                        <button class="buy-upgrade" data-id="${upgrade.id}" ${canAfford ? '' : 'disabled'}>
+                            Acheter
+                        </button>
+                    `;
+                    
+                    upgradesContainer.appendChild(upgradeElement);
+                }
+            });
+        }
+
+        // Mise à jour de l'interface
+        function updateUI() {
+            pointsDisplay.textContent = gameState.points.toFixed(1);
+            co2Display.textContent = gameState.co2.toFixed(1);
+            energyDisplay.textContent = gameState.energy.toFixed(1);
+            moneyDisplay.textContent = gameState.money.toFixed(1);
+            
+            // Désactiver les boutons si ressources insuffisantes
+            trainBtn.disabled = gameState.energy < 0.5;
+            generateEnergyBtn.disabled = gameState.money < 10;
+            
+            renderUpgrades();
+        }
+
+        // Journal des événements
+        function addLog(message) {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString();
+            const logEntry = document.createElement('p');
+            logEntry.innerHTML = `<span class="time">[${timeString}]</span> ${message}`;
+            log.appendChild(logEntry);
+            log.scrollTop = log.scrollHeight;
+            console.log(message);  // Ajout pour débogage
+        }
+
+        // Initialisation du jeu
+        function initGame() {
+            loadGame();
+            setupEventListeners();
+            startGameLoop();
+            updatePlanetImage();
+            updateUI();
+            
+            // Message de bienvenue
+            addLog("Bienvenue dans Carbon Clicker!");
+            addLog("Entraînez des IA tout en gérant votre impact écologique!");
+            console.log("Jeu initialisé");  // Ajout pour débogage
+        }
+
+        // Démarrer le jeu
+        document.addEventListener('DOMContentLoaded', initGame);
+        // Initialiser immédiatement si le DOM est déjà chargé
+        if (document.readyState === 'complete' || document.readyState === 'interactive') {
+            initGame();
+        }
+    </script>
+</body>
+</html>
